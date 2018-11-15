@@ -86,15 +86,15 @@ func (m *Mutex) Lock() {
 	for {
 		// Don't spin in starvation mode, ownership is handed off to waiters
 		// so we won't be able to acquire the mutex anyway.
-		if old&(mutexLocked|mutexStarving) == mutexLocked && runtime_canSpin(iter) {
+		if old&(mutexLocked|mutexStarving) == mutexLocked && runtime_canSpin(iter) { // （已被锁定且模式不是饥饿） && （可以自旋） 这段代码作用:如果可以自旋,设置唤醒标志位为1
 			// Active spinning makes sense.
 			// Try to set mutexWoken flag to inform Unlock
 			// to not wake other blocked goroutines.
 			if !awoke && old&mutexWoken == 0 && old>>mutexWaiterShift != 0 &&
-				atomic.CompareAndSwapInt32(&m.state, old, old|mutexWoken) {
+				atomic.CompareAndSwapInt32(&m.state, old, old|mutexWoken) { // （未唤醒） && （唤醒标志为0） && （有等待的协程） && （标记唤醒成功）
 				awoke = true
 			}
-			runtime_doSpin()
+			runtime_doSpin() //执行汇编的PAUSE指令,什么也不做,目的是等待一小段时间
 			iter++
 			old = m.state
 			continue
@@ -183,7 +183,7 @@ func (m *Mutex) Unlock() {
 	if (new+mutexLocked)&mutexLocked == 0 {
 		throw("sync: unlock of unlocked mutex")
 	}
-	if new&mutexStarving == 0 {
+	if new&mutexStarving == 0 { //如果没有处于饥饿模式
 		old := new
 		for {
 			// If there are no waiters or a goroutine has already
@@ -192,18 +192,18 @@ func (m *Mutex) Unlock() {
 			// goroutine to the next waiter. We are not part of this chain,
 			// since we did not observe mutexStarving when we unlocked the mutex above.
 			// So get off the way.
-			if old>>mutexWaiterShift == 0 || old&(mutexLocked|mutexWoken|mutexStarving) != 0 {
+			if old>>mutexWaiterShift == 0 || old&(mutexLocked|mutexWoken|mutexStarving) != 0 { //如果没有等待协程直接退出,不需要释放信号量; 如果锁已被抢占、已唤醒了协程或锁处理饥饿状态，也直接退出，不需要释放信号量
 				return
 			}
 			// Grab the right to wake someone.
-			new = (old - 1<<mutexWaiterShift) | mutexWoken
+			new = (old - 1<<mutexWaiterShift) | mutexWoken   //等待协程数量减1，并标记唤醒标志，该标志用于Lock时判断
 			if atomic.CompareAndSwapInt32(&m.state, old, new) {
-				runtime_Semrelease(&m.sema, false)
+				runtime_Semrelease(&m.sema, false) //释放一个信号量(信号量+1)
 				return
 			}
 			old = m.state
 		}
-	} else {
+	} else { //当前锁处理饥饿模式,直接释放一个信号量给等待队列的第一个协程。尽管此处只是传递信号量给等待协程并没有把锁授予等待协程，但因为是饥饿状态，所以新来的协程无法抢占，所以不会有问题
 		// Starving mode: handoff mutex ownership to the next waiter.
 		// Note: mutexLocked is not set, the waiter will set it after wakeup.
 		// But mutex is still considered locked if mutexStarving is set,
