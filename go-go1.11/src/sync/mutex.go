@@ -71,7 +71,7 @@ const (
 // blocks until the mutex is available.
 func (m *Mutex) Lock() {
 	// Fast path: grab unlocked mutex.
-	if atomic.CompareAndSwapInt32(&m.state, 0, mutexLocked) {
+	if atomic.CompareAndSwapInt32(&m.state, 0, mutexLocked) { //直接尝试加锁，加锁成功直接退出
 		if race.Enabled {
 			race.Acquire(unsafe.Pointer(m))
 		}
@@ -91,7 +91,7 @@ func (m *Mutex) Lock() {
 			// Try to set mutexWoken flag to inform Unlock
 			// to not wake other blocked goroutines.
 			if !awoke && old&mutexWoken == 0 && old>>mutexWaiterShift != 0 &&
-				atomic.CompareAndSwapInt32(&m.state, old, old|mutexWoken) { // （未唤醒） && （唤醒标志为0） && （有等待的协程） && （标记唤醒成功）
+				atomic.CompareAndSwapInt32(&m.state, old, old|mutexWoken) { // （未唤醒） && （唤醒标志为0） && （有等待的协程） && （标记唤醒成功） 这里标记Woken用于通知Unlock，不必再释放信号量了。
 				awoke = true
 			}
 			runtime_doSpin() //执行汇编的PAUSE指令,什么也不做,目的是等待一小段时间
@@ -131,7 +131,7 @@ func (m *Mutex) Lock() {
 			if waitStartTime == 0 {
 				waitStartTime = runtime_nanotime()
 			}
-			runtime_SemacquireMutex(&m.sema, queueLifo)
+			runtime_SemacquireMutex(&m.sema, queueLifo) //阻塞等待信号量，被唤醒时不代表已拥有锁，需要跟新来的协程抢锁。 如果是阻塞时间超过1ms则说明进入饥饿模式，那么被唤醒的协程将会在抢锁过程中占压倒性优势。
 			starving = starving || runtime_nanotime()-waitStartTime > starvationThresholdNs
 			old = m.state
 			if old&mutexStarving != 0 {
@@ -193,7 +193,7 @@ func (m *Mutex) Unlock() {
 			// since we did not observe mutexStarving when we unlocked the mutex above.
 			// So get off the way.
 			if old>>mutexWaiterShift == 0 || old&(mutexLocked|mutexWoken|mutexStarving) != 0 { //如果没有等待协程直接退出,不需要释放信号量; 如果锁已被抢占、已唤醒了协程或锁处理饥饿状态，也直接退出，不需要释放信号量
-				return
+				return //此处，如果Lock()自旋过程中将Woken置1，就不必释放信号量了。
 			}
 			// Grab the right to wake someone.
 			new = (old - 1<<mutexWaiterShift) | mutexWoken   //等待协程数量减1，并标记唤醒标志，该标志用于Lock时判断
