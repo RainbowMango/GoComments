@@ -95,7 +95,7 @@ func (rw *RWMutex) Lock() {
 	r := atomic.AddInt32(&rw.readerCount, -rwmutexMaxReaders) + rwmutexMaxReaders //使用原子操作减去rwmutexMaxReaders将readerCount置为负值,目的是阻止读锁。再加上rwmutexMaxReaders又可以获取原来的读者数。非常精妙
 	// Wait for active readers.
 	if r != 0 && atomic.AddInt32(&rw.readerWait, r) != 0 { //如果读者数是0，那么直接获取写锁，不需要等待信号量。 因为写锁获取成功，所以此处简单的加上读者数量即可。（加上读者数量应该不会出现0的情况）
-		runtime_SemacquireMutex(&rw.writerSem, false)
+		runtime_SemacquireMutex(&rw.writerSem, false) // 续：此处将读者数写入readerWait实际上是用于排队，即当前为止的读者释放后轮到写操作，避免写锁被饿死
 	}
 	if race.Enabled {
 		race.Enable()

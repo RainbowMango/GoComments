@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package reflect implements run-time reflection, allowing a program to
-// manipulate objects with arbitrary types. The typical use is to take a value
+// Package reflect implements run-time reflection, allowing a program to        //reflect包实现运行时反射,允许程序操纵任意类型对象。
+// manipulate objects with arbitrary types. The typical use is to take a value  //典型用法是把值用interface{}类型表示，然后使用TypeOf方法动态提取其动态类型信息，该方法返回一个Type结构。
 // with static type interface{} and extract its dynamic type information by
 // calling TypeOf, which returns a Type.
 //
@@ -24,17 +24,17 @@ import (
 	"unsafe"
 )
 
-// Type is the representation of a Go type.
+// Type is the representation of a Go type.                   //Type结构体用于表示GO语言的类型
 //
-// Not all methods apply to all kinds of types. Restrictions,
+// Not all methods apply to all kinds of types. Restrictions, //(本包中提供的)方法并不是适用于所有类型。如果有限制会在每个方法处写明。
 // if any, are noted in the documentation for each method.
-// Use the Kind method to find out the kind of type before
-// calling kind-specific methods. Calling a method
+// Use the Kind method to find out the kind of type before    //使用Kind()方法找出类型再调用该类型适用的方法。
+// calling kind-specific methods. Calling a method            //如果调用了不适合该类型的方法，会产生panic。
 // inappropriate to the kind of type causes a run-time panic.
 //
-// Type values are comparable, such as with the == operator,
+// Type values are comparable, such as with the == operator,  //Type是可以比较的，所以可以作为map的key键。
 // so they can be used as map keys.
-// Two Type values are equal if they represent identical types.
+// Two Type values are equal if they represent identical types. //如果两个类型一样，那么其Type值也一样。
 type Type interface {
 	// Methods applicable to all types.
 
