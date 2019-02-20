@@ -728,7 +728,7 @@ func (t *T) Parallel() {
 		root.mu.Unlock()
 	}
 
-	t.signal <- true   // Release calling test. 当前测试即将进入并发模式，标记测试结束，便父测试不必等待
+	t.signal <- true   // Release calling test. 当前测试即将进入并发模式，标记测试结束，以便父测试不必等待并退出Run()
 	<-t.parent.barrier // Wait for the parent test to complete.  等待父测试发送子测试启动信号
 	t.context.waitParallel() // 阻塞等待并发调度
 
@@ -875,13 +875,13 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	// count correct. This ensures that a sequence of sequential tests runs
 	// without being preempted, even when their parent is a parallel test. This
 	// may especially reduce surprises if *parallel == 1.
-	go tRunner(t, f)
-	if !<-t.signal {
+	go tRunner(t, f) // 启动协程执行子测试
+	if !<-t.signal { // 阻塞等待子测试结束信号，如果信号为'false'，说明出现异常退出
 		// At this point, it is likely that FailNow was called on one of the
 		// parent tests by one of the subtests. Continue aborting up the chain.
 		runtime.Goexit()
 	}
-	return !t.failed
+	return !t.failed // 返回子测试的执行结果
 }
 
 // testContext holds all fields that are common to all tests. This includes
