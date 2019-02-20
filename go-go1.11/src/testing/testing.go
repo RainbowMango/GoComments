@@ -712,13 +712,13 @@ func (t *T) Parallel() {
 	// We don't want to include the time we spend waiting for serial tests
 	// in the test duration. Record the elapsed time thus far and reset the
 	// timer afterwards.
-	t.duration += time.Since(t.start)
+	t.duration += time.Since(t.start) // 启动并发测试有可能要等待，等待期间耗时需要剔除，此处相当于先记录当前耗时，并发执行后再累加
 
 	// Add to the list of tests to be released by the parent.
-	t.parent.sub = append(t.parent.sub, t)
+	t.parent.sub = append(t.parent.sub, t) // 将当前测试加入到父测试的列表中，由父测试调度
 	t.raceErrors += race.Errors()
 
-	if t.chatty {
+	if t.chatty { // 如果是日志详细模式"-v"，记录一条PAUSE日志到顶层测试中，表示测试阻塞中
 		// Print directly to root's io.Writer so there is no delay.
 		root := t.parent
 		for ; root.parent != nil; root = root.parent {
@@ -728,11 +728,11 @@ func (t *T) Parallel() {
 		root.mu.Unlock()
 	}
 
-	t.signal <- true   // Release calling test.
-	<-t.parent.barrier // Wait for the parent test to complete.
-	t.context.waitParallel()
+	t.signal <- true   // Release calling test. 当前测试即将进入并发模式，标记测试结束，便父测试不必等待
+	<-t.parent.barrier // Wait for the parent test to complete.  等待父测试发送子测试启动信号
+	t.context.waitParallel() // 阻塞等待并发调度
 
-	if t.chatty {
+	if t.chatty { // 如果是日志详细模式"-v"，记录一条CONT日志到顶层测试中，表示测试阻塞结束，并开始执行
 		// Print directly to root's io.Writer so there is no delay.
 		root := t.parent
 		for ; root.parent != nil; root = root.parent {
@@ -742,7 +742,7 @@ func (t *T) Parallel() {
 		root.mu.Unlock()
 	}
 
-	t.start = time.Now()
+	t.start = time.Now() // 开始并发执行，重新标记启动时间，这是第二段耗时
 	t.raceErrors += -race.Errors()
 }
 
