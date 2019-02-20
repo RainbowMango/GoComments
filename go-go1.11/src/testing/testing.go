@@ -771,7 +771,7 @@ func tRunner(t *T, fn func(t *T)) {
 			t.Errorf("race detected during execution of test")
 		}
 
-		t.duration += time.Since(t.start)
+		t.duration += time.Since(t.start) // 进入defer后立即记录测试执行时间,后续流程所花费的时间不应该统计到本测试执行用时中
 		// If the test panicked, print any test output before dying.
 		err := recover()
 		signal := true
@@ -792,26 +792,26 @@ func tRunner(t *T, fn func(t *T)) {
 			panic(err)
 		}
 
-		if len(t.sub) > 0 {
+		if len(t.sub) > 0 { // 如果存在子测试，则启动并等待其完成
 			// Run parallel subtests.
 			// Decrease the running count for this test.
-			t.context.release()
+			t.context.release() // 减少运行计数
 			// Release the parallel subtests.
-			close(t.barrier)
+			close(t.barrier)  // 启动子测试
 			// Wait for subtests to complete.
-			for _, sub := range t.sub {
+			for _, sub := range t.sub { // 等待所有子测试结束
 				<-sub.signal
 			}
-			if !t.isParallel {
+			if !t.isParallel { // 如果当前测试非并发模式，则等待并发执行，类似于测试函数中执行t.Parallel()
 				// Reacquire the count for sequential tests. See comment in Run.
 				t.context.waitParallel()
 			}
-		} else if t.isParallel {
+		} else if t.isParallel { // 如果当前测试是并发模式，则释放信号以启动新的测试
 			// Only release the count for this test if it was run as a parallel
 			// test. See comment in Run method.
 			t.context.release()
 		}
-		t.report() // Report after all subtests have finished.
+		t.report() // 测试执行结束后向父测试报告日志
 
 		// Do not lock t.done to allow race detector to detect race in case
 		// the user does not appropriately synchronizes a goroutine.
@@ -819,10 +819,10 @@ func tRunner(t *T, fn func(t *T)) {
 		if t.parent != nil && atomic.LoadInt32(&t.hasSub) == 0 {
 			t.setRan()
 		}
-		t.signal <- signal
+		t.signal <- signal // 向调度者发送结束信号
 	}()
 
-	t.start = time.Now()
+	t.start = time.Now() // 记录测试开始时间
 	t.raceErrors = -race.Errors()
 	fn(t)
 
@@ -916,24 +916,24 @@ func newTestContext(maxParallel int, m *matcher) *testContext {
 
 func (c *testContext) waitParallel() {
 	c.mu.Lock()
-	if c.running < c.maxParallel {
+	if c.running < c.maxParallel {  // 如果当前运行的测试数未达到最大值，直接返回
 		c.running++
 		c.mu.Unlock()
 		return
 	}
-	c.numWaiting++
+	c.numWaiting++                  // 如果当前运行的测试数已达最大值，需要阻塞等待
 	c.mu.Unlock()
 	<-c.startParallel
 }
 
 func (c *testContext) release() {
 	c.mu.Lock()
-	if c.numWaiting == 0 {
+	if c.numWaiting == 0 {         // 如果没有函数在等待，直接返回
 		c.running--
 		c.mu.Unlock()
 		return
 	}
-	c.numWaiting--
+	c.numWaiting--                 // 如果有函数在等待，释放一个信号
 	c.mu.Unlock()
 	c.startParallel <- true // Pick a waiting test to be run.
 }
