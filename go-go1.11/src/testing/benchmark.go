@@ -41,7 +41,7 @@ type InternalBenchmark struct {
 // The other reporting methods, such as the variations of Log and Error,
 // may be called simultaneously from multiple goroutines.
 //
-// Like in tests, benchmark logs are accumulated during execution
+// Like in tests, benchmark logs are accumulated during execution  // 跟单元测试相同的是，benchmark 也是在测试结束统一打印日志，跟单元测试所不同的是，benchamark会打印所有日志，而不是跟据是否有'-v'参数而选择性的过滤一些日志，因为有些场景下日志也会影响性能。
 // and dumped to standard error when done. Unlike in tests, benchmark logs
 // are always printed, so as not to hide output whose existence may be
 // affecting benchmark results.

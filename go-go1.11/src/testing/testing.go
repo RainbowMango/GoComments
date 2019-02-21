@@ -847,17 +847,17 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	// continue walking the stack into the parent test.
 	var pc [maxStackLen]uintptr
 	n := runtime.Callers(2, pc[:])
-	t = &T{
+	t = &T{ // 创建一个新的testing.T用于执行子测试
 		common: common{
 			barrier: make(chan bool),
 			signal:  make(chan bool),
 			name:    testName,
 			parent:  &t.common,
-			level:   t.level + 1,
+			level:   t.level + 1, // 子测试层次+1
 			creator: pc[:n],
 			chatty:  t.chatty,
 		},
-		context: t.context,
+		context: t.context, // 子测试的context与父测试相同
 	}
 	t.w = indenter{&t.common}
 
@@ -876,7 +876,7 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	// without being preempted, even when their parent is a parallel test. This
 	// may especially reduce surprises if *parallel == 1.
 	go tRunner(t, f) // 启动协程执行子测试
-	if !<-t.signal { // 阻塞等待子测试结束信号，如果信号为'false'，说明出现异常退出
+	if !<-t.signal { // 阻塞等待子测试结束信号，子测试要么执行结束，要么以Parallel()执行。如果信号为'false'，说明出现异常退出
 		// At this point, it is likely that FailNow was called on one of the
 		// parent tests by one of the subtests. Continue aborting up the chain.
 		runtime.Goexit()
