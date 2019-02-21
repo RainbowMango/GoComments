@@ -56,16 +56,16 @@ type B struct {
 	benchTime        time.Duration
 	bytes            int64
 	missingBytes     bool // one of the subbenchmarks does not have bytes set.
-	timerOn          bool
+	timerOn          bool // 是否已开始计时
 	showAllocResult  bool
-	result           BenchmarkResult
+	result           BenchmarkResult // 测试结果
 	parallelism      int // RunParallel creates parallelism*GOMAXPROCS goroutines
 	// The initial states of memStats.Mallocs and memStats.TotalAlloc.
-	startAllocs uint64
-	startBytes  uint64
+	startAllocs uint64  // 计时开始时堆中分配的对象总数
+	startBytes  uint64  // 计时开始时时堆中分配的字节总数
 	// The net total of this test after being run.
-	netAllocs uint64
-	netBytes  uint64
+	netAllocs uint64 // 计时结束时，堆中增加的对象总数
+	netBytes  uint64 // 计时结束时，堆中增加的字节总数
 }
 
 // StartTimer starts timing a test. This function is called automatically
@@ -110,12 +110,12 @@ func (b *B) ResetTimer() {
 
 // SetBytes records the number of bytes processed in a single operation.
 // If this is called, the benchmark will report ns/op and MB/s.
-func (b *B) SetBytes(n int64) { b.bytes = n }
+func (b *B) SetBytes(n int64) { b.bytes = n } // 设置单个操作处理的字节数，需要用户提供数据，程序跟据执行时间算出每秒处理的字节数。e.g. 单个操作处理1M数据，而单个操作耗时1S，则会显示1MB/s。
 
 // ReportAllocs enables malloc statistics for this benchmark.
 // It is equivalent to setting -test.benchmem, but it only affects the
 // benchmark function that calls ReportAllocs.
-func (b *B) ReportAllocs() {
+func (b *B) ReportAllocs() { // 开启内存统计，等同于命令行参数‘-benchmem’，但本方法只作用于调用此方法的测试
 	b.showAllocResult = true
 }
 
@@ -197,7 +197,7 @@ func roundUp(n int) int {
 
 // run1 runs the first iteration of benchFunc. It returns whether more
 // iterations of this benchmarks should be run.
-func (b *B) run1() bool {
+func (b *B) run1() bool { // 性能测试的第一次迭代，其执行结果决定会不会继续迭代
 	if ctx := b.context; ctx != nil {
 		// Extend maxLen, if needed.
 		if n := len(b.name) + ctx.extLen + 1; n > ctx.maxLen {
@@ -220,7 +220,7 @@ func (b *B) run1() bool {
 	}
 	// Only print the output if we know we are not going to proceed.
 	// Otherwise it is printed in processBench.
-	if atomic.LoadInt32(&b.hasSub) != 0 || b.finished {
+	if atomic.LoadInt32(&b.hasSub) != 0 || b.finished { // 如果包含子测试或者测试已结束（可能执行了FailNow()等）则返回false，不必继续迭代
 		tag := "BENCH"
 		if b.skipped {
 			tag = "SKIP"
@@ -265,7 +265,7 @@ func (b *B) doBench() BenchmarkResult {
 // of benchmark iterations until the benchmark runs for the requested benchtime.
 // launch is run by the doBench function as a separate goroutine.
 // run1 must have been called on b.
-func (b *B) launch() {
+func (b *B) launch() { // 此方法自动测算执行次数，但调用前必须调用run1以便自动计算次数
 	// Signal that we're done whether we return normally
 	// or by FailNow's runtime.Goexit.
 	defer func() {
@@ -274,9 +274,9 @@ func (b *B) launch() {
 
 	// Run the benchmark for at least the specified amount of time.
 	d := b.benchTime
-	for n := 1; !b.failed && b.duration < d && n < 1e9; {
+	for n := 1; !b.failed && b.duration < d && n < 1e9; { // 最少执行b.benchTime（默认为1s）时间，最多执行1e9次
 		last := n
-		// Predict required iterations.
+		// Predict required iterations.   // 预测接下来要执行多少次，b.benchTime/每个操作耗时
 		n = int(d.Nanoseconds())
 		if nsop := b.nsPerOp(); nsop != 0 {
 			n /= int(nsop)
@@ -284,9 +284,9 @@ func (b *B) launch() {
 		// Run more iterations than we think we'll need (1.2x).
 		// Don't grow too fast in case we had timing errors previously.
 		// Be sure to run at least one more than last time.
-		n = max(min(n+n/5, 100*last), last+1)
+		n = max(min(n+n/5, 100*last), last+1) // 避免增长较快，先增长20%，至少增长1次
 		// Round up to something easy to read.
-		n = roundUp(n)
+		n = roundUp(n) // 下次迭代次数向上取整到10的指数，方便阅读
 		b.runN(n)
 	}
 	b.result = BenchmarkResult{b.N, b.duration, b.bytes, b.netAllocs, b.netBytes}
@@ -331,7 +331,7 @@ func (r BenchmarkResult) AllocedBytesPerOp() int64 {
 	return int64(r.MemBytes) / int64(r.N)
 }
 
-func (r BenchmarkResult) String() string {
+func (r BenchmarkResult) String() string {  // 结果格式化输出
 	mbs := r.mbPerSec()
 	mb := ""
 	if mbs != 0 {
@@ -358,7 +358,7 @@ func (r BenchmarkResult) MemString() string {
 }
 
 // benchmarkName returns full name of benchmark including procs suffix.
-func benchmarkName(name string, n int) string {
+func benchmarkName(name string, n int) string {  // 获取打印的测试名称，n值为CPU个数
 	if n != 1 {
 		return fmt.Sprintf("%s-%d", name, n)
 	}
@@ -396,7 +396,7 @@ func runBenchmarks(importPath string, matchString func(pat, str string) (bool, e
 	}
 	var bs []InternalBenchmark
 	for _, Benchmark := range benchmarks {
-		if _, matched, _ := ctx.match.fullName(nil, Benchmark.Name); matched {
+		if _, matched, _ := ctx.match.fullName(nil, Benchmark.Name); matched { // 过滤得到将要运行的测试列表，插入到bs切片中
 			bs = append(bs, Benchmark)
 			benchName := benchmarkName(Benchmark.Name, maxprocs)
 			if l := len(benchName) + ctx.extLen + 1; l > ctx.maxLen {
@@ -404,7 +404,7 @@ func runBenchmarks(importPath string, matchString func(pat, str string) (bool, e
 			}
 		}
 	}
-	main := &B{
+	main := &B{  // main 测试，属于root测试，调度执行所有性能测试
 		common: common{
 			name:   "Main",
 			w:      os.Stdout,
