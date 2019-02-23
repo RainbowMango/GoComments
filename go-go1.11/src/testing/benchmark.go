@@ -46,15 +46,15 @@ type InternalBenchmark struct {
 // are always printed, so as not to hide output whose existence may be
 // affecting benchmark results.
 type B struct {
-	common
+	common                         // 与testing.T共享的testing.common，负责记录日志、状态等
 	importPath       string // import path of the package containing the benchmark
 	context          *benchContext
-	N                int
+	N                int            // 目标代码执行次数，不需要用户了解具体值，会自动调整
 	previousN        int           // number of iterations in the previous run
 	previousDuration time.Duration // total duration of the previous run
-	benchFunc        func(b *B)
-	benchTime        time.Duration
-	bytes            int64
+	benchFunc        func(b *B)   // 性能测试函数
+	benchTime        time.Duration // 性能测试函数最少执行的时间，默认为1s，可以通过参数'-benchtime 10s'指定
+	bytes            int64         // 每次迭代处理的字节数
 	missingBytes     bool // one of the subbenchmarks does not have bytes set.
 	timerOn          bool // 是否已开始计时
 	showAllocResult  bool
@@ -73,11 +73,11 @@ type B struct {
 // a call to StopTimer.
 func (b *B) StartTimer() {
 	if !b.timerOn {
-		runtime.ReadMemStats(&memStats)
-		b.startAllocs = memStats.Mallocs
-		b.startBytes = memStats.TotalAlloc
-		b.start = time.Now()
-		b.timerOn = true
+		runtime.ReadMemStats(&memStats)     // 读取当前堆内存分配信息
+		b.startAllocs = memStats.Mallocs    // 记录当前堆内存分配的对象数
+		b.startBytes = memStats.TotalAlloc  // 记录当前堆内存分配的字节数
+		b.start = time.Now()                // 记录测试启动时间
+		b.timerOn = true                   // 标记计时标志
 	}
 }
 
@@ -86,11 +86,11 @@ func (b *B) StartTimer() {
 // want to measure.
 func (b *B) StopTimer() {
 	if b.timerOn {
-		b.duration += time.Since(b.start)
-		runtime.ReadMemStats(&memStats)
-		b.netAllocs += memStats.Mallocs - b.startAllocs
-		b.netBytes += memStats.TotalAlloc - b.startBytes
-		b.timerOn = false
+		b.duration += time.Since(b.start)                   // 累加测试耗时
+		runtime.ReadMemStats(&memStats)                     // 读取当前堆内存分配信息
+		b.netAllocs += memStats.Mallocs - b.startAllocs     // 累加堆内存分配的对象数
+		b.netBytes += memStats.TotalAlloc - b.startBytes    // 累加堆内存分配的字节数
+		b.timerOn = false                                  // 标记计时标志
 	}
 }
 
@@ -98,14 +98,14 @@ func (b *B) StopTimer() {
 // It does not affect whether the timer is running.
 func (b *B) ResetTimer() {
 	if b.timerOn {
-		runtime.ReadMemStats(&memStats)
-		b.startAllocs = memStats.Mallocs
-		b.startBytes = memStats.TotalAlloc
-		b.start = time.Now()
+		runtime.ReadMemStats(&memStats)     // 读取当前堆内存分配信息
+		b.startAllocs = memStats.Mallocs    // 记录当前堆内存分配的对象数
+		b.startBytes = memStats.TotalAlloc  // 记录当前堆内存分配的字节数
+		b.start = time.Now()                // 记录测试启动时间
 	}
-	b.duration = 0
-	b.netAllocs = 0
-	b.netBytes = 0
+	b.duration = 0                          // 清空耗时
+	b.netAllocs = 0                         // 清空内存分配对象数
+	b.netBytes = 0                          // 清空内存分配字节数
 }
 
 // SetBytes records the number of bytes processed in a single operation.
@@ -132,14 +132,14 @@ func (b *B) runN(n int) {
 	defer benchmarkLock.Unlock()
 	// Try to get a comparable environment for each run
 	// by clearing garbage from previous runs.
-	runtime.GC()
+	runtime.GC()                  // 先主动触发垃圾回收，避免内存统计数据不准确
 	b.raceErrors = -race.Errors()
-	b.N = n
+	b.N = n                       // 指定B.N
 	b.parallelism = 1
-	b.ResetTimer()
-	b.StartTimer()
-	b.benchFunc(b)
-	b.StopTimer()
+	b.ResetTimer()                // 清空统计数据
+	b.StartTimer()                // 开始计时
+	b.benchFunc(b)                // 执行测试
+	b.StopTimer()                 // 停止计时
 	b.previousN = n
 	b.previousDuration = b.duration
 	b.raceErrors += race.Errors()
@@ -491,7 +491,7 @@ func (b *B) Run(name string, f func(b *B)) bool {
 	}
 	var pc [maxStackLen]uintptr
 	n := runtime.Callers(2, pc[:])
-	sub := &B{
+	sub := &B{                          // 新建子测试数据结构
 		common: common{
 			signal:  make(chan bool),
 			name:    benchName,
@@ -511,7 +511,7 @@ func (b *B) Run(name string, f func(b *B)) bool {
 		// Only process sub-benchmarks, if any.
 		atomic.StoreInt32(&sub.hasSub, 1)
 	}
-	if sub.run1() {
+	if sub.run1() { // 先执行一次子测试，如果子测试不出错且子测试没有子测试的话继续执行sub.run()
 		sub.run()
 	}
 	b.add(sub.result)
