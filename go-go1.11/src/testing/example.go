@@ -14,9 +14,9 @@ import (
 )
 
 type InternalExample struct {
-	Name      string
-	F         func()
-	Output    string
+	Name      string    // 测试名称
+	F         func()   // 测试函数
+	Output    string    //
 	Unordered bool
 }
 
@@ -62,23 +62,23 @@ func runExample(eg InternalExample) (ok bool) {
 	}
 
 	// Capture stdout.
-	stdout := os.Stdout
-	r, w, err := os.Pipe()
+	stdout := os.Stdout      // 备份标输出文件
+	r, w, err := os.Pipe()   // 创建一个管道
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	os.Stdout = w
+	os.Stdout = w           // 标准输出文件暂时修改为管道的入口，即所有的标准输出实际上都会进入管道
 	outC := make(chan string)
 	go func() {
 		var buf strings.Builder
-		_, err := io.Copy(&buf, r)
+		_, err := io.Copy(&buf, r)  // 从管道中读出数据
 		r.Close()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "testing: copying pipe: %v\n", err)
 			os.Exit(1)
 		}
-		outC <- buf.String()
+		outC <- buf.String()  // 管道中读出的数据写入channel中
 	}()
 
 	start := time.Now()
@@ -86,22 +86,22 @@ func runExample(eg InternalExample) (ok bool) {
 
 	// Clean up in a deferred call so we can recover if the example panics.
 	defer func() {
-		dstr := fmtDuration(time.Since(start))
+		dstr := fmtDuration(time.Since(start))         // 计时结束，记录测试用时
 
 		// Close pipe, restore stdout, get output.
-		w.Close()
-		os.Stdout = stdout
-		out := <-outC
+		w.Close()                // 关闭管道
+		os.Stdout = stdout       // 恢复原标准输出
+		out := <-outC            // 从channel中取出数据
 
 		var fail string
 		err := recover()
-		got := strings.TrimSpace(out)
-		want := strings.TrimSpace(eg.Output)
-		if eg.Unordered {
+		got := strings.TrimSpace(out)        // 实际得到的打印字符串
+		want := strings.TrimSpace(eg.Output) // 期望的字符串
+		if eg.Unordered { // 如果输出是无序的，则把输出字符串和期望字符串排序后比较
 			if sortLines(got) != sortLines(want) && err == nil {
 				fail = fmt.Sprintf("got:\n%s\nwant (unordered):\n%s\n", out, eg.Output)
 			}
-		} else {
+		} else { // 如果输出是有序的，则直接比较输出字符串和期望字符串
 			if got != want && err == nil {
 				fail = fmt.Sprintf("got:\n%s\nwant:\n%s\n", got, want)
 			}
