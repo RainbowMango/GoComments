@@ -969,7 +969,7 @@ type M struct {
 	benchmarks []InternalBenchmark
 	examples   []InternalExample
 
-	timer     *time.Timer
+	timer     *time.Timer        // 定时器，指定测试超时时间
 	afterOnce sync.Once
 
 	numRun int

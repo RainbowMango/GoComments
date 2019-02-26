@@ -16,8 +16,8 @@ import (
 type InternalExample struct {
 	Name      string    // 测试名称
 	F         func()   // 测试函数
-	Output    string    //
-	Unordered bool
+	Output    string    // 期望字符串
+	Unordered bool      // 输出是否是无序的
 }
 
 // An internal function but exported because it is cross-package; part of the implementation
