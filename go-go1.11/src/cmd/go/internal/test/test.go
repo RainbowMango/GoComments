@@ -527,7 +527,7 @@ var testVetFlags = []string{
 	// "-unusedresult",
 }
 
-func runTest(cmd *base.Command, args []string) {
+func runTest(cmd *base.Command, args []string) {  // go test的入口函数
 	modload.LoadTests = true
 
 	pkgArgs, testArgs = testFlags(args)
@@ -537,7 +537,7 @@ func runTest(cmd *base.Command, args []string) {
 	work.BuildInit()
 	work.VetFlags = testVetFlags
 
-	pkgs = load.PackagesForBuild(pkgArgs)
+	pkgs = load.PackagesForBuild(pkgArgs)  // 加载要测试的包
 	if len(pkgs) == 0 {
 		base.Fatalf("no packages to test")
 	}

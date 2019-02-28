@@ -109,7 +109,7 @@ var testBin string
 
 // The TestMain function creates a go command for testing purposes and
 // deletes it after the tests have been run.
-func TestMain(m *testing.M) {
+func TestMain(m *testing.M) {  // 创建本次测试的二进制文件并执行，执行结束删除
 	if os.Getenv("GO_GCFLAGS") != "" {
 		fmt.Fprintf(os.Stderr, "testing: warning: no tests to run\n") // magic string for cmd/go
 		fmt.Printf("cmd/go test is not compatible with $GO_GCFLAGS being set\n")
@@ -124,7 +124,7 @@ func TestMain(m *testing.M) {
 		select {}
 	}
 
-	dir, err := ioutil.TempDir(os.Getenv("GOTMPDIR"), "cmd-go-test-")
+	dir, err := ioutil.TempDir(os.Getenv("GOTMPDIR"), "cmd-go-test-") // 创建临时目录
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestMain(m *testing.M) {
 		if err := os.Mkdir(testBin, 0777); err != nil {
 			log.Fatal(err)
 		}
-		testGo = filepath.Join(testBin, "go"+exeSuffix)
+		testGo = filepath.Join(testBin, "go"+exeSuffix) // 生成二进制的名字
 		args := []string{"build", "-tags", "testgo", "-o", testGo}
 		if race.Enabled {
 			args = append(args, "-race")
@@ -179,7 +179,7 @@ func TestMain(m *testing.M) {
 			return
 		}
 
-		out, err := exec.Command(gotool, args...).CombinedOutput()
+		out, err := exec.Command(gotool, args...).CombinedOutput() // 编译二进制
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "building testgo failed: %v\n%s", err, out)
 			os.Exit(2)
@@ -233,9 +233,9 @@ func TestMain(m *testing.M) {
 		os.Setenv("GOCACHE", testGOCACHE) // because $HOME is gone
 	}
 
-	r := m.Run()
+	r := m.Run()  // 执行测试用例
 	if !*testWork {
-		removeAll(testTmpDir) // os.Exit won't run defer
+		removeAll(testTmpDir) // os.Exit won't run defer  // 执行测试结束，删除二进制
 	}
 
 	os.Exit(r)
