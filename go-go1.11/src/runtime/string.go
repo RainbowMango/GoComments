@@ -20,16 +20,16 @@ type tmpBuf [tmpStringBufSize]byte
 // If buf != nil, the compiler has determined that the result does not
 // escape the calling function, so the string data can be stored in buf
 // if small enough.
-func concatstrings(buf *tmpBuf, a []string) string {
-	idx := 0
-	l := 0
-	count := 0
+func concatstrings(buf *tmpBuf, a []string) string { // 字符串拼接
+	idx := 0      // a的最后一个长度不为空的string成员下标
+	l := 0        // 拼接后总的字符串长度
+	count := 0    // a中长度不为空的string成员个数
 	for i, x := range a {
 		n := len(x)
 		if n == 0 {
 			continue
 		}
-		if l+n < l {
+		if l+n < l { // 长度溢出
 			throw("string concatenation too long")
 		}
 		l += n
@@ -46,8 +46,8 @@ func concatstrings(buf *tmpBuf, a []string) string {
 	if count == 1 && (buf != nil || !stringDataOnStack(a[idx])) {
 		return a[idx]
 	}
-	s, b := rawstringtmp(buf, l)
-	for _, x := range a {
+	s, b := rawstringtmp(buf, l) // 创建一个string，同时得到一个切片b，二者共享相同的内存，使用b给string赋值
+	for _, x := range a { // 将待拼接的字符串逐个拼接到切片b中
 		copy(b, x)
 		b = b[len(x):]
 	}
@@ -72,7 +72,7 @@ func concatstring5(buf *tmpBuf, a [5]string) string {
 
 // Buf is a fixed-size buffer for the result,
 // it is not nil if the result does not escape.
-func slicebytetostring(buf *tmpBuf, b []byte) (str string) {
+func slicebytetostring(buf *tmpBuf, b []byte) (str string) { // 切片转string，发生一次内存拷贝
 	l := len(b)
 	if l == 0 {
 		// Turns out to be a relatively common case.
@@ -138,7 +138,7 @@ func rawstringtmp(buf *tmpBuf, l int) (s string, b []byte) {
 // - Used for m[string(k)] lookup where m is a string-keyed map and k is a []byte.
 // - Used for "<"+string(b)+">" concatenation where b is []byte.
 // - Used for string(b)=="foo" comparison where b is []byte.
-func slicebytetostringtmp(b []byte) string {
+func slicebytetostringtmp(b []byte) string { // 根据byte切片生成临时的string，适用于特殊场景下
 	if raceenabled && len(b) > 0 {
 		racereadrangepc(unsafe.Pointer(&b[0]),
 			uintptr(len(b)),
@@ -148,18 +148,18 @@ func slicebytetostringtmp(b []byte) string {
 	if msanenabled && len(b) > 0 {
 		msanread(unsafe.Pointer(&b[0]), uintptr(len(b)))
 	}
-	return *(*string)(unsafe.Pointer(&b))
+	return *(*string)(unsafe.Pointer(&b)) // 只是简单的强制类型转换
 }
 
-func stringtoslicebyte(buf *tmpBuf, s string) []byte {
+func stringtoslicebyte(buf *tmpBuf, s string) []byte { // string类型转成byte slice
 	var b []byte
-	if buf != nil && len(s) <= len(buf) {
-		*buf = tmpBuf{}
-		b = buf[:len(s)]
-	} else {
+	if buf != nil && len(s) <= len(buf) { // 如果提供了临时buf且空间够用，则使用临时buf构建切片
+		*buf = tmpBuf{}  // 清空临时buf
+		b = buf[:len(s)] // 基于临时buf构建新切片
+	} else {                             // 如果没有临时buf，则需要重新构建切片
 		b = rawbyteslice(len(s))
 	}
-	copy(b, s)
+	copy(b, s) // 发生一次内存拷贝
 	return b
 }
 
@@ -254,7 +254,7 @@ func intstring(buf *[4]byte, v int64) (s string) {
 // string and byte slice both refer to the same storage.
 // The storage is not zeroed. Callers should use
 // b to set the string contents and then drop b.
-func rawstring(size int) (s string, b []byte) {
+func rawstring(size int) (s string, b []byte) { // 生成一个新的string，返回的string和切片共享相同的空间
 	p := mallocgc(uintptr(size), nil, false)
 
 	stringStructOf(&s).str = p
@@ -266,14 +266,14 @@ func rawstring(size int) (s string, b []byte) {
 }
 
 // rawbyteslice allocates a new byte slice. The byte slice is not zeroed.
-func rawbyteslice(size int) (b []byte) {
-	cap := roundupsize(uintptr(size))
-	p := mallocgc(cap, nil, false)
+func rawbyteslice(size int) (b []byte) { // 分配指定大小的byte切片
+	cap := roundupsize(uintptr(size))  // 跟据size计算待分配空间大小,也即切片的容量
+	p := mallocgc(cap, nil, false) // 申请空间
 	if cap != uintptr(size) {
 		memclrNoHeapPointers(add(p, uintptr(size)), cap-uintptr(size))
 	}
 
-	*(*slice)(unsafe.Pointer(&b)) = slice{p, size, int(cap)}
+	*(*slice)(unsafe.Pointer(&b)) = slice{p, size, int(cap)} // 创建切片
 	return
 }
 
@@ -467,9 +467,9 @@ func findnullw(s *uint16) int {
 }
 
 //go:nosplit
-func gostringnocopy(str *byte) string {
-	ss := stringStruct{str: unsafe.Pointer(str), len: findnull(str)}
-	s := *(*string)(unsafe.Pointer(&ss))
+func gostringnocopy(str *byte) string { // 跟据字符串地址构建string
+	ss := stringStruct{str: unsafe.Pointer(str), len: findnull(str)} // 先构造stringStruct
+	s := *(*string)(unsafe.Pointer(&ss))                             // 再将stringStruct转换成string
 	return s
 }
 
