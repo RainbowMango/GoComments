@@ -62,13 +62,13 @@ func (t *timer) assignBucket() *timersBucket {
 //go:notinheap
 type timersBucket struct {
 	lock         mutex
-	gp           *g
-	created      bool
+	gp           *g          // 处理堆中事件的协程
+	created      bool        // 堆是否已创建，默认为false，添加首个定时器时置为true
 	sleeping     bool
 	rescheduling bool
 	sleepUntil   int64
 	waitnote     note
-	t            []*timer
+	t            []*timer    // 定时器切片
 }
 
 // nacl fake time support - time in nanoseconds since 1970
@@ -139,7 +139,7 @@ func addtimer(t *timer) {
 }
 
 // Add a timer to the heap and start or kick timerproc if the new timer is
-// earlier than any of the others.
+// earlier than any of the others.                                           // 添加定时器到堆中，如果定时器比堆中所有定时器都早，则立即唤醒timerproc
 // Timers are locked.
 // Returns whether all is well: false if the data structure is corrupt
 // due to user-level races.
@@ -149,14 +149,14 @@ func (tb *timersBucket) addtimerLocked(t *timer) bool {
 	if t.when < 0 {
 		t.when = 1<<63 - 1
 	}
-	t.i = len(tb.t)
-	tb.t = append(tb.t, t)
-	if !siftupTimer(tb.t, t.i) {
+	t.i = len(tb.t)                 // 先把定时器插入到堆尾
+	tb.t = append(tb.t, t)          // 保存定时器
+	if !siftupTimer(tb.t, t.i) {    // 堆中插入数据，触发堆重新排序
 		return false
 	}
-	if t.i == 0 {
+	if t.i == 0 { // 堆排序后，发现新插入的定时器跑到了栈顶，需要唤醒协程来处理
 		// siftup moved to top: new earliest deadline.
-		if tb.sleeping {
+		if tb.sleeping {                 // 唤醒协程来处理新加入的定时器
 			tb.sleeping = false
 			notewakeup(&tb.waitnote)
 		}
@@ -165,7 +165,7 @@ func (tb *timersBucket) addtimerLocked(t *timer) bool {
 			goready(tb.gp, 0)
 		}
 	}
-	if !tb.created {
+	if !tb.created {       // 如果是系统首个定时器，则启动协程处理堆中的定时器
 		tb.created = true
 		go timerproc(tb)
 	}
@@ -221,31 +221,31 @@ func deltimer(t *timer) bool {
 // Timerproc runs the time-driven events.
 // It sleeps until the next event in the tb heap.
 // If addtimer inserts a new earlier event, it wakes timerproc early.
-func timerproc(tb *timersBucket) {
-	tb.gp = getg()
-	for {
+func timerproc(tb *timersBucket) { // 执行由时间驱动的事件，持续睡眠到位于堆顶的下一个事件到来（如果有新的事件加入，且新事件会最早触发，则立即唤醒）。
+	tb.gp = getg()  // 保存执行堆事件的协程
+	for {  // 协程一旦启动就是无限循环，没有退出条件
 		lock(&tb.lock)
 		tb.sleeping = false
 		now := nanotime()
 		delta := int64(-1)
-		for {
-			if len(tb.t) == 0 {
+		for {  // 开始遍历堆来处理事件
+			if len(tb.t) == 0 {     // 堆为空，说明没有定时器，停止遍历
 				delta = -1
 				break
 			}
-			t := tb.t[0]
+			t := tb.t[0]            // 取栈顶timer
 			delta = t.when - now
-			if delta > 0 {
+			if delta > 0 {         // 如果delta > 0 说明堆顶事件时间还没到，直接退出，进入睡眠
 				break
 			}
 			ok := true
-			if t.period > 0 {
+			if t.period > 0 {      // 如果period > 0 说明这个是周期性的定时器（tiker），调整下次执行时间，放重新放回堆中排序
 				// leave in heap but adjust next time to fire
 				t.when += t.period * (1 + -delta/t.period)
 				if !siftdownTimer(tb.t, 0) {
 					ok = false
 				}
-			} else {
+			} else {              // 如果period <= 0（实际上是0），说明是一次性的定时器，从堆项元素移除，并调整堆
 				// remove from heap
 				last := len(tb.t) - 1
 				if last > 0 {
@@ -271,10 +271,10 @@ func timerproc(tb *timersBucket) {
 			if raceenabled {
 				raceacquire(unsafe.Pointer(t))
 			}
-			f(arg, seq)
+			f(arg, seq)          // 执行定时器既定的方法，此处没有启动协程，因为此处调用的方法必须不会阻塞
 			lock(&tb.lock)
 		}
-		if delta < 0 || faketime > 0 {
+		if delta < 0 || faketime > 0 {   // 堆中没有定时器，进入不定期睡眠，需要添加定时器时goready才可以唤醒
 			// No timers left - put goroutine to sleep.
 			tb.rescheduling = true
 			goparkunlock(&tb.lock, waitReasonTimerGoroutineIdle, traceEvGoBlock, 1)
