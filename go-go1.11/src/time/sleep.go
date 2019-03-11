@@ -46,7 +46,7 @@ func stopTimer(*runtimeTimer) bool
 // When the Timer expires, the current time will be sent on C,
 // unless the Timer was created by AfterFunc.
 // A Timer must be created with NewTimer or AfterFunc.
-type Timer struct {
+type Timer struct { // Timer代表一次定时，时间到来后仅发生一个事件。
 	C <-chan Time
 	r runtimeTimer
 }
@@ -77,22 +77,22 @@ func (t *Timer) Stop() bool {
 	if t.r.f == nil {
 		panic("time: Stop called on uninitialized Timer")
 	}
-	return stopTimer(&t.r)
+	return stopTimer(&t.r) // 此处停止定时器，是把Timer.runtimeTimer从系统维护的timer堆中删除，否则系统会持续维护timer，从而造成资源泄露
 }
 
 // NewTimer creates a new Timer that will send
 // the current time on its channel after at least duration d.
 func NewTimer(d Duration) *Timer {
-	c := make(chan Time, 1)
-	t := &Timer{
-		C: c,
+	c := make(chan Time, 1)  // 创建一个管道
+	t := &Timer{ // 构造timer数据结构
+		C: c,               // 新创建的管道
 		r: runtimeTimer{
-			when: when(d),
-			f:    sendTime,
-			arg:  c,
+			when: when(d),  // 时间
+			f:    sendTime, // 时间到来后执行函数sendTime
+			arg:  c,        // 时间到来后执行函数sendTime时附带的参数
 		},
 	}
-	startTimer(&t.r)
+	startTimer(&t.r) // 此处启动定时器，只是把runtimeTimer放到系统维护的timer堆中，由系统维护timer
 	return t
 }
 
@@ -120,7 +120,7 @@ func NewTimer(d Duration) *Timer {
 // is a race condition between draining the channel and the new timer expiring.
 // Reset should always be invoked on stopped or expired channels, as described above.
 // The return value exists to preserve compatibility with existing programs.
-func (t *Timer) Reset(d Duration) bool {
+func (t *Timer) Reset(d Duration) bool { // 重启定时器意味着停止先前的定时器并重新启动新的
 	if t.r.f == nil {
 		panic("time: Reset called on uninitialized Timer")
 	}
@@ -131,15 +131,15 @@ func (t *Timer) Reset(d Duration) bool {
 	return active
 }
 
-func sendTime(c interface{}, seq uintptr) {
+func sendTime(c interface{}, seq uintptr) { // NewTimer 和 NewTicker共用的发送时间到管道的方法
 	// Non-blocking send of time on c.
-	// Used in NewTimer, it cannot block anyway (buffer).
-	// Used in NewTicker, dropping sends on the floor is
+	// Used in NewTimer, it cannot block anyway (buffer). // NewTimer的管道含有一个缓存,所以绝不会阻塞
+	// Used in NewTicker, dropping sends on the floor is  // NewTicker场景下如果阻塞说明接收者处理的慢，就直接放弃本次发送，放弃也没有问题，因为发送是周期的。
 	// the desired behavior when the reader gets behind,
 	// because the sends are periodic.
 	select {
 	case c.(chan Time) <- Now():
-	default:
+	default: // 因为有default，所以如果管道中满了的情况下，会直接通过default结束函数
 	}
 }
 

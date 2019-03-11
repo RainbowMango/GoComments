@@ -30,7 +30,7 @@ func NewTicker(d Duration) *Ticker {
 		C: c,
 		r: runtimeTimer{
 			when:   when(d),
-			period: int64(d),
+			period: int64(d), // Ticker跟Timer的重要区就是提供了period这个参数，据此决定timer是一次性的，还是周期性的
 			f:      sendTime,
 			arg:    c,
 		},
