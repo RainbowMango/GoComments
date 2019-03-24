@@ -14,14 +14,14 @@ func runtimeNano() int64
 // Interface to timers implemented in package runtime.
 // Must be in sync with ../runtime/time.go:/^type timer
 type runtimeTimer struct {
-	tb uintptr
-	i  int
+	tb uintptr                          // 当前定时器寄存于系统timer堆的地址
+	i  int                              // 当前定时器寄存于系统timer堆的下标
 
-	when   int64
-	period int64
-	f      func(interface{}, uintptr) // NOTE: must not be closure
-	arg    interface{}
-	seq    uintptr
+	when   int64                        // 当前定时器触发时间
+	period int64                        // 当前定时器周期触发间隔
+	f      func(interface{}, uintptr) // NOTE: must not be closure  // 定时器触发时执行的函数
+	arg    interface{}                 // 定时器触发时执行函数传递的参数一
+	seq    uintptr                      // 定时器触发时执行函数传递的参数二(该参数只在网络收发场景下使用)
 }
 
 // when is a helper function for setting the 'when' field of a runtimeTimer.
