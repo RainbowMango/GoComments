@@ -46,11 +46,11 @@ func (t *Ticker) Stop() {
 	stopTimer(&t.r)
 }
 
-// Tick is a convenience wrapper for NewTicker providing access to the ticking
-// channel only. While Tick is useful for clients that have no need to shut down
+// Tick is a convenience wrapper for NewTicker providing access to the ticking    // Tick()是对NewTicker()的封装，只提供ticker的管道
+// channel only. While Tick is useful for clients that have no need to shut down  // Tick()在不需要关闭的场景下非常有用，但必须明确因为没有手段关闭底层的Ticker，所以会有"泄露"的风险
 // the Ticker, be aware that without a way to shut it down the underlying
 // Ticker cannot be recovered by the garbage collector; it "leaks".
-// Unlike NewTicker, Tick will return nil if d <= 0.
+// Unlike NewTicker, Tick will return nil if d <= 0.                              // Tick()不像NewTicker()，当d <= 0时它返回nil
 func Tick(d Duration) <-chan Time {
 	if d <= 0 {
 		return nil
