@@ -108,20 +108,20 @@ type mutex struct {
 	key uintptr
 }
 
-// sleep and wakeup on one-time events.
+// sleep and wakeup on one-time events.         // （触发)sleep和wakeup的一次性事件
 // before any calls to notesleep or notewakeup,
-// must call noteclear to initialize the Note.
+// must call noteclear to initialize the Note.  // 在调用notesleep和notewakeup前必须先调用noteclear来初始化Note.
 // then, exactly one thread can call notesleep
-// and exactly one thread can call notewakeup (once).
+// and exactly one thread can call notewakeup (once). // （初始化后）线程可以调用notesleep进入睡眠，线程也可以调用notewakeup来唤醒另一个线程。
 // once notewakeup has been called, the notesleep
-// will return.  future notesleep will return immediately.
+// will return.  future notesleep will return immediately. // 一旦notewakeup被调用,notesleep就会返回(解除阻塞状态)
 // subsequent noteclear must be called only after
 // previous notesleep has returned, e.g. it's disallowed
-// to call noteclear straight after notewakeup.
+// to call noteclear straight after notewakeup.           // noteclear必须在上次的notesleep返回后调用(否则有可能永远醒不过来)
 //
-// notetsleep is like notesleep but wakes up after
-// a given number of nanoseconds even if the event
-// has not yet happened.  if a goroutine uses notetsleep to
+// notetsleep is like notesleep but wakes up after        // notetsleep: 睡眠指定的时间,可以被提前唤醒或时间到来后自动唤醒
+// a given number of nanoseconds even if the event        // notesleep: 只能被唤醒
+// has not yet happened.  if a goroutine uses notetsleep to // notetsleep必须等其他协程执行noteclear来唤醒自已。
 // wake up early, it must wait to call noteclear until it
 // can be sure that no other goroutine is calling
 // notewakeup.

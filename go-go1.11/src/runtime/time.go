@@ -16,17 +16,17 @@ import (
 // For GOOS=nacl, package syscall knows the layout of this structure.
 // If this struct changes, adjust ../syscall/net_nacl.go:/runtimeTimer.
 type timer struct {
-	tb *timersBucket // the bucket the timer lives in
-	i  int           // heap index
+	tb *timersBucket // the bucket the timer lives in   // 当前定时器寄存于系统timer堆的地址
+	i  int           // heap index                      // 当前定时器寄存于系统timer堆的下标
 
 	// Timer wakes up at when, and then at when+period, ... (period > 0 only)
 	// each time calling f(arg, now) in the timer goroutine, so f must be
 	// a well-behaved function and not block.
-	when   int64
-	period int64
-	f      func(interface{}, uintptr)
-	arg    interface{}
-	seq    uintptr
+	when   int64                                        // 当前定时器下次触发时间
+	period int64                                        // 当前定时器周期触发间隔（如果是Timer，间隔为0，表示不重复触发）
+	f      func(interface{}, uintptr)                 // 定时器触发时执行的函数
+	arg    interface{}                                // 定时器触发时执行函数传递的参数一
+	seq    uintptr                                     // 定时器触发时执行函数传递的参数二(该参数只在网络收发场景下使用)
 }
 
 // timersLen is the length of timers array.
@@ -63,11 +63,11 @@ func (t *timer) assignBucket() *timersBucket {
 type timersBucket struct {
 	lock         mutex
 	gp           *g          // 处理堆中事件的协程
-	created      bool        // 堆是否已创建，默认为false，添加首个定时器时置为true
-	sleeping     bool
-	rescheduling bool
-	sleepUntil   int64
-	waitnote     note
+	created      bool        // 事件处理协程是否已创建，默认为false，添加首个定时器时置为true
+	sleeping     bool        // 事件处理协程（gp）是否在睡眠(如果t中有定时器，还未到触发的时间，那么gp会投入睡眠)
+	rescheduling bool        // 事件处理协程（gp）是否已暂停（如果t中定时器均已删除，那么gp会暂停）
+	sleepUntil   int64       // 事件处理协程睡眠时间
+	waitnote     note        // 事件处理协程睡眠事件（据此唤醒协程）
 	t            []*timer    // 定时器切片
 }
 
@@ -156,11 +156,11 @@ func (tb *timersBucket) addtimerLocked(t *timer) bool {
 	}
 	if t.i == 0 { // 堆排序后，发现新插入的定时器跑到了栈顶，需要唤醒协程来处理
 		// siftup moved to top: new earliest deadline.
-		if tb.sleeping {                 // 唤醒协程来处理新加入的定时器
+		if tb.sleeping {                 // 协程在睡眠，唤醒协程来处理新加入的定时器
 			tb.sleeping = false
 			notewakeup(&tb.waitnote)
 		}
-		if tb.rescheduling {
+		if tb.rescheduling {             // 协程已暂停，唤醒协程来处理新加入的定时器
 			tb.rescheduling = false
 			goready(tb.gp, 0)
 		}
@@ -363,29 +363,29 @@ func timeSleepUntil() int64 {
 // itself is called without locks, so racy calls can cause a timer to
 // change buckets while executing these functions.
 
-func siftupTimer(t []*timer, i int) bool {
+func siftupTimer(t []*timer, i int) bool { // 添加元素后向上调整堆
 	if i >= len(t) {
 		return false
 	}
 	when := t[i].when
 	tmp := t[i]
 	for i > 0 {
-		p := (i - 1) / 4 // parent
-		if when >= t[p].when {
+		p := (i - 1) / 4 // parent // 注意，这里不是二叉堆，而是4叉堆，查找父节点算法略有区别
+		if when >= t[p].when {    // timer的触发时间比父节点晚，则退出循环
 			break
 		}
-		t[i] = t[p]
-		t[i].i = i
-		i = p
+		t[i] = t[p]               // (timer的触发时间比父节点早) 则与父节点交换
+		t[i].i = i                // (因为把父节点换位置了)修改父节点内部记录的位置
+		i = p                     // 下一次比较从父节点开始
 	}
-	if tmp != t[i] {
-		t[i] = tmp
-		t[i].i = i
+	if tmp != t[i] {             // 如果发生过调整（此时i值已变成目标位置），则把目标timer放到最终位置
+		t[i] = tmp               // 把目标timer放到最终位置
+		t[i].i = i               // 修改目标timer内部记录的位置
 	}
 	return true
 }
 
-func siftdownTimer(t []*timer, i int) bool {
+func siftdownTimer(t []*timer, i int) bool { // 删除堆顶元素后向下调整堆
 	n := len(t)
 	if i >= n {
 		return false
