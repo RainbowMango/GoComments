@@ -126,7 +126,7 @@ func runGet(cmd *base.Command, args []string) {
 
 	work.BuildInit()
 
-	if *getF && !*getU {
+	if *getF && !*getU {  // -f选项必段伴随-u选项，否则不予执行。
 		base.Fatalf("go get: cannot use -f flag without -u")
 	}
 
@@ -186,7 +186,7 @@ func runGet(cmd *base.Command, args []string) {
 	pkgs := load.PackagesForBuild(args)
 
 	// Phase 3. Install.
-	if *getD {
+	if *getD {    // 如果有-d参数，则跳过安装阶段
 		// Download only.
 		// Check delayed until now so that importPaths
 		// and packagesForBuild have a chance to print errors.
@@ -203,7 +203,7 @@ func runGet(cmd *base.Command, args []string) {
 // initial ...-free prefix.
 func downloadPaths(patterns []string) []string {
 	for _, arg := range patterns {
-		if strings.Contains(arg, "@") {
+		if strings.Contains(arg, "@") { //不支持协带版本号。如，"go get -d -v github.com/davyxu/tabtoy@1.0.0"
 			base.Fatalf("go: cannot use path@version syntax in GOPATH mode")
 		}
 	}
